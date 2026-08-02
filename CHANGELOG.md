@@ -9,4 +9,4 @@ First public Voice Everywhere release.
 - Light, dark, and system themes with accent palettes.
 - Voice Everywhere application, installer, tray, and desktop branding.
 
-This release is based on the open-source Handy project. See [NOTICE](NOTICE) for attribution.
+This release is based on the open-source Handy project. See [NOTICE](https://github.com/izandeissele666/voice-everywhere/blob/main/NOTICE) for attribution.

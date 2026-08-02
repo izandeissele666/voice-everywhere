@@ -24,7 +24,7 @@ Voice Everywhere turns speech into text on your computer. Press a global shortcu
 
 ## Install
 
-1. Download `Voice Everywhere_0.9.4_x64-setup.exe` from [Releases](https://github.com/izandeissele666/voice-everywhere/releases).
+1. Download `Voice.Everywhere_0.9.4_x64-setup.exe` from [Releases](https://github.com/izandeissele666/voice-everywhere/releases).
 2. Run the installer and grant microphone access when Windows asks.
 3. Pick or download a model during onboarding, then use the configured global shortcut.
 
