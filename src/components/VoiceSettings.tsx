@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { AccentColorSelector } from "./settings/AccentColorSelector";
 import { AutostartToggle, GeneralSettings } from "./settings";
 import { AppLanguageSelector } from "./settings/AppLanguageSelector";
+import { ShowOverlay } from "./settings/ShowOverlay";
 import { ThemeSelector } from "./settings/ThemeSelector";
 import { SettingsGroup } from "./ui/SettingsGroup";
 
@@ -33,6 +34,7 @@ const VoiceSettings = () => {
       <div className="mb-6 max-w-3xl">
         <SettingsGroup title={t("settings.advanced.groups.app")}>
           <AutostartToggle descriptionMode="inline" grouped />
+          <ShowOverlay descriptionMode="inline" grouped />
         </SettingsGroup>
       </div>
       <GeneralSettings />
