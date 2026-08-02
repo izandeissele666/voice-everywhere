@@ -61,7 +61,6 @@ const RecordingOverlay: React.FC = () => {
           if (settings.status === "ok") {
             applyTheme(settings.data.theme ?? "system");
             applyAccentColor(settings.data.accent_color ?? "violet");
-            setPosition(settings.data.overlay_position ?? "field");
           }
         } catch {
           // Keep the previous/default placement if settings can't be read.
@@ -83,6 +82,11 @@ const RecordingOverlay: React.FC = () => {
       const unlistenHide = await listen("hide-overlay", () => {
         setIsVisible(false);
       });
+
+      const unlistenPlacement = await listen<OverlayPosition>(
+        "overlay-placement",
+        (event) => setPosition(event.payload),
+      );
 
       const unlistenLevel = await listen<number[]>("mic-level", (event) => {
         const newLevels = event.payload as number[];
@@ -109,6 +113,7 @@ const RecordingOverlay: React.FC = () => {
       return () => {
         unlistenShow();
         unlistenHide();
+        unlistenPlacement();
         unlistenLevel();
         unlistenStream();
         unlistenPhase();

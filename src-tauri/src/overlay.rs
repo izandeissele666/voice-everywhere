@@ -298,20 +298,33 @@ fn windows_overlay_bounds(
     logical_width: f64,
     logical_height: f64,
     overlay_position: OverlayPosition,
-    caret_rect: Option<(i32, i32, i32, i32)>,
+    text_target: Option<input::TextTarget>,
 ) -> (i32, i32, i32, i32) {
     let width = (logical_width * scale).round().max(1.0) as i32;
     let height = (logical_height * scale).round().max(1.0) as i32;
     if overlay_position == OverlayPosition::Field {
-        if let Some(caret_rect) = caret_rect {
-            return field_overlay_bounds(
-                monitor_position,
-                monitor_size,
-                scale,
-                width,
-                height,
-                caret_rect,
-            );
+        match text_target {
+            Some(input::TextTarget::Caret(caret_rect)) => {
+                return caret_overlay_bounds(
+                    monitor_position,
+                    monitor_size,
+                    scale,
+                    width,
+                    height,
+                    caret_rect,
+                );
+            }
+            Some(input::TextTarget::Field(field_rect)) => {
+                return text_field_overlay_bounds(
+                    monitor_position,
+                    monitor_size,
+                    scale,
+                    width,
+                    height,
+                    field_rect,
+                );
+            }
+            None => {}
         }
     }
 
@@ -338,7 +351,7 @@ fn windows_overlay_bounds(
 /// Centers a field-adjacent overlay on the caret. Prefer the right side, then
 /// the left, and clamp within the monitor so the indicator remains fully visible.
 #[cfg(target_os = "windows")]
-fn field_overlay_bounds(
+fn caret_overlay_bounds(
     monitor_position: PhysicalPosition<i32>,
     monitor_size: PhysicalSize<u32>,
     scale: f64,
@@ -375,6 +388,53 @@ fn field_overlay_bounds(
     (x, y, width, height)
 }
 
+/// Places an overlay just above or below a focused field when its provider does
+/// not expose a caret range. Right alignment keeps it close without covering text.
+#[cfg(target_os = "windows")]
+fn text_field_overlay_bounds(
+    monitor_position: PhysicalPosition<i32>,
+    monitor_size: PhysicalSize<u32>,
+    scale: f64,
+    width: i32,
+    height: i32,
+    (field_left, field_top, field_right, field_bottom): (i32, i32, i32, i32),
+) -> (i32, i32, i32, i32) {
+    let gap = (OVERLAY_FIELD_GAP * scale).round() as i32;
+    let gutter = (OVERLAY_FIELD_GUTTER * scale).round() as i32;
+    let monitor_right = monitor_position.x + monitor_size.width as i32;
+    let monitor_bottom = monitor_position.y + monitor_size.height as i32;
+    let min_x = monitor_position.x + gutter;
+    let max_x = monitor_right - width - gutter;
+    let min_y = monitor_position.y + gutter;
+    let max_y = monitor_bottom - height - gutter;
+    let desired_x = field_right - width;
+    let above_y = field_top - gap - height;
+    let desired_y = if above_y >= min_y {
+        above_y
+    } else {
+        field_bottom + gap
+    };
+    let x = if min_x <= max_x {
+        desired_x.clamp(min_x, max_x)
+    } else {
+        monitor_position.x
+    };
+    let y = if min_y <= max_y {
+        desired_y.clamp(min_y, max_y)
+    } else {
+        monitor_position.y
+    };
+
+    // For providers returning an excessively wide container, retain proximity
+    // to its left edge rather than drifting to the monitor edge.
+    let x = if field_right - field_left > monitor_size.width as i32 - gutter * 2 {
+        field_left.clamp(min_x, max_x)
+    } else {
+        x
+    };
+    (x, y, width, height)
+}
+
 /// Moves and sizes the overlay in one native SetWindowPos, bypassing tao's
 /// current-DPI logical conversion that mislands cross-monitor moves.
 #[cfg(target_os = "windows")]
@@ -387,11 +447,15 @@ fn place_windows_overlay(
     use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
     let overlay_position = settings::get_settings(app_handle).overlay_position;
-    let caret_rect = (overlay_position == OverlayPosition::Field)
-        .then(input::get_text_caret_rect)
+    let text_target = (overlay_position == OverlayPosition::Field)
+        .then(input::get_text_target)
         .flatten();
-    let monitor = caret_rect
-        .and_then(|(left, top, _, _)| get_monitor_at_position(app_handle, (left, top)))
+    log::debug!("focused text target: {text_target:?}");
+    let monitor = text_target
+        .and_then(|target| {
+            let (left, top, _, _) = target.rect();
+            get_monitor_at_position(app_handle, (left, top))
+        })
         .or_else(|| get_monitor_with_cursor(app_handle))
         .ok_or_else(|| "failed to determine the monitor containing the cursor".to_string())?;
     let (x, y, width, height) = windows_overlay_bounds(
@@ -401,7 +465,7 @@ fn place_windows_overlay(
         logical_width,
         logical_height,
         overlay_position,
-        caret_rect,
+        text_target,
     );
     let hwnd = overlay_window
         .hwnd()
@@ -420,13 +484,22 @@ fn place_windows_overlay(
         .map_err(|error| format!("failed to set overlay bounds: {error}"))?;
     }
 
+    let effective_position = if overlay_position == OverlayPosition::Field && text_target.is_none()
+    {
+        OverlayPosition::BottomRight
+    } else {
+        overlay_position
+    };
+    let _ = overlay_window.emit("overlay-placement", effective_position);
+
     log::debug!(
-        "windows overlay bounds: x={} y={} width={} height={} scale={}",
+        "windows overlay bounds: x={} y={} width={} height={} scale={} placement={:?}",
         x,
         y,
         width,
         height,
-        monitor.scale_factor()
+        monitor.scale_factor(),
+        effective_position
     );
     Ok(())
 }
@@ -434,6 +507,9 @@ fn place_windows_overlay(
 /// Creates the recording overlay window and keeps it hidden by default
 #[cfg(not(target_os = "macos"))]
 pub fn create_recording_overlay(app_handle: &AppHandle) {
+    #[cfg(target_os = "windows")]
+    input::initialize_text_target_detection();
+
     // On Linux (Wayland), monitor detection often fails, but we don't need exact coordinates
     // for Layer Shell as we use anchors. On other platforms, we require a monitor.
     #[cfg(not(target_os = "linux"))]
@@ -557,6 +633,17 @@ fn show_overlay_state_on_main(app_handle: &AppHandle, state: &str) {
     // Size the overlay for this state (compact vs. streaming), then position it.
     let (width, height) = overlay_dimensions(state);
     if let Some(overlay_window) = app_handle.get_webview_window("recording_overlay") {
+        #[cfg(not(target_os = "windows"))]
+        {
+            let configured = settings::get_settings(app_handle).overlay_position;
+            let effective = if configured == OverlayPosition::Field {
+                OverlayPosition::BottomRight
+            } else {
+                configured
+            };
+            let _ = overlay_window.emit("overlay-placement", effective);
+        }
+
         #[cfg(target_os = "linux")]
         update_gtk_layer_shell_anchors(&overlay_window);
 
@@ -665,6 +752,14 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
 
         #[cfg(not(target_os = "windows"))]
         {
+            let configured = settings::get_settings(app_handle).overlay_position;
+            let effective = if configured == OverlayPosition::Field {
+                OverlayPosition::BottomRight
+            } else {
+                configured
+            };
+            let _ = overlay_window.emit("overlay-placement", effective);
+
             // Use the window's current size so right-edge placement stays correct
             // whether the overlay is in compact or streaming layout.
             let (width, height) = current_overlay_logical_size(&overlay_window)
@@ -847,9 +942,26 @@ mod tests {
                 OVERLAY_WIDTH,
                 OVERLAY_HEIGHT,
                 OverlayPosition::Field,
-                Some((400, 300, 402, 320)),
+                Some(input::TextTarget::Caret((400, 300, 402, 320))),
             ),
             (414, 276, 320, 68)
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn focused_field_fallback_stays_adjacent_to_the_field() {
+        assert_eq!(
+            windows_overlay_bounds(
+                PhysicalPosition::new(0, 0),
+                PhysicalSize::new(1920, 1080),
+                1.0,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
+                OverlayPosition::Field,
+                Some(input::TextTarget::Field((500, 800, 1400, 850))),
+            ),
+            (1080, 720, 320, 68)
         );
     }
 
