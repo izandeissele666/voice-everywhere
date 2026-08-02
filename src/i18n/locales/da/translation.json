@@ -295,8 +295,11 @@
           "title": "Overlay-placering",
           "description": "Hvor overlayet vises på skærmen under optagelse og transskription.",
           "options": {
-            "bottom": "Bund",
-            "top": "Top"
+            "field": "Ved tekstfeltet",
+            "topLeft": "Øverst til venstre",
+            "topRight": "Øverst til højre",
+            "bottomLeft": "Nederst til venstre",
+            "bottomRight": "Nederst til højre"
           }
         }
       },

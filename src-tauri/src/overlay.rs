@@ -36,9 +36,9 @@ tauri_panel! {
 // Native overlay window sizes (logical points). One window is reused for every
 // state and resized in `show_overlay_state`; each size need only be at least as
 // large as the card it hosts (the `--ov-*` vars in RecordingOverlay.css). The
-// card is CSS-anchored flush to the lower-right window edge, so window dimensions
-// don't move where the card sits — only the edge offsets do. Keep these in sync
-// with the CSS card geometry.
+// card is CSS-anchored to its selected corner. Field placement instead anchors
+// the card to the window's top-left so it can sit beside the active text caret.
+// Keep these in sync with the CSS card geometry.
 //
 // Compact overlay (Minimal / transcribing / processing): the 54h pill animates
 // width from 232 (--ov-rest-w) to 290 (--ov-work-w) and expands from center, so
@@ -73,7 +73,9 @@ const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
 
-const OVERLAY_RIGHT_OFFSET: f64 = 24.0;
+const OVERLAY_EDGE_OFFSET: f64 = 24.0;
+const OVERLAY_FIELD_GAP: f64 = 12.0;
+const OVERLAY_FIELD_GUTTER: f64 = 12.0;
 
 #[cfg(target_os = "linux")]
 fn update_gtk_layer_shell_anchors(overlay_window: &tauri::webview::WebviewWindow) {
@@ -82,16 +84,11 @@ fn update_gtk_layer_shell_anchors(overlay_window: &tauri::webview::WebviewWindow
         // Try to get the GTK window from the Tauri webview
         if let Ok(gtk_window) = window_clone.gtk_window() {
             let settings = settings::get_settings(window_clone.app_handle());
-            match settings.overlay_position {
-                OverlayPosition::Top => {
-                    gtk_window.set_anchor(Edge::Top, true);
-                    gtk_window.set_anchor(Edge::Bottom, false);
-                }
-                OverlayPosition::Bottom => {
-                    gtk_window.set_anchor(Edge::Bottom, true);
-                    gtk_window.set_anchor(Edge::Top, false);
-                }
-            }
+            let position = settings.overlay_position;
+            gtk_window.set_anchor(Edge::Top, position.is_top());
+            gtk_window.set_anchor(Edge::Bottom, !position.is_top());
+            gtk_window.set_anchor(Edge::Left, position.is_left());
+            gtk_window.set_anchor(Edge::Right, !position.is_left());
         }
     });
 }
@@ -171,36 +168,41 @@ fn force_overlay_topmost(overlay_window: &tauri::webview::WebviewWindow) {
 
 fn get_monitor_with_cursor(app_handle: &AppHandle) -> Option<tauri::Monitor> {
     if let Some(mouse_location) = input::get_cursor_position(app_handle) {
-        if let Ok(monitors) = app_handle.available_monitors() {
-            for monitor in monitors {
-                // On Windows both the cursor (enigo -> GetCursorPos) and the
-                // monitor bounds are physical pixels, so compare them directly.
-                #[cfg(target_os = "windows")]
-                if is_mouse_within_monitor(mouse_location, monitor.position(), monitor.size()) {
-                    return Some(monitor);
-                }
-
-                // macOS/Linux: enigo returns logical coords, so scale the bounds down.
-                #[cfg(not(target_os = "windows"))]
-                {
-                    let scale = monitor.scale_factor();
-                    let pos = PhysicalPosition::new(
-                        (monitor.position().x as f64 / scale) as i32,
-                        (monitor.position().y as f64 / scale) as i32,
-                    );
-                    let size = PhysicalSize::new(
-                        (monitor.size().width as f64 / scale) as u32,
-                        (monitor.size().height as f64 / scale) as u32,
-                    );
-                    if is_mouse_within_monitor(mouse_location, &pos, &size) {
-                        return Some(monitor);
-                    }
-                }
-            }
+        if let Some(monitor) = get_monitor_at_position(app_handle, mouse_location) {
+            return Some(monitor);
         }
     }
 
     app_handle.primary_monitor().ok().flatten()
+}
+
+fn get_monitor_at_position(app_handle: &AppHandle, position: (i32, i32)) -> Option<tauri::Monitor> {
+    let monitors = app_handle.available_monitors().ok()?;
+    for monitor in monitors {
+        // On Windows both the cursor/caret and monitor bounds are physical pixels.
+        #[cfg(target_os = "windows")]
+        if is_mouse_within_monitor(position, monitor.position(), monitor.size()) {
+            return Some(monitor);
+        }
+
+        // macOS/Linux input coordinates are logical, so scale monitor bounds down.
+        #[cfg(not(target_os = "windows"))]
+        {
+            let scale = monitor.scale_factor();
+            let monitor_position = PhysicalPosition::new(
+                (monitor.position().x as f64 / scale) as i32,
+                (monitor.position().y as f64 / scale) as i32,
+            );
+            let monitor_size = PhysicalSize::new(
+                (monitor.size().width as f64 / scale) as u32,
+                (monitor.size().height as f64 / scale) as u32,
+            );
+            if is_mouse_within_monitor(position, &monitor_position, &monitor_size) {
+                return Some(monitor);
+            }
+        }
+    }
+    None
 }
 
 fn is_mouse_within_monitor(
@@ -250,22 +252,25 @@ fn calculate_overlay_position(
 
     let settings = settings::get_settings(app_handle);
 
-    let x = monitor_x + monitor_width - width - OVERLAY_RIGHT_OFFSET;
-    let y = match settings.overlay_position {
-        OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
-        OverlayPosition::Bottom => {
-            // work_area.position shares monitor.position's global coordinate
-            // space, so no monitor offset is added.
-            #[cfg(target_os = "macos")]
-            let bottom = {
-                let wa = monitor.work_area();
-                (wa.position.y as f64 + wa.size.height as f64) / scale
-            };
-            #[cfg(not(target_os = "macos"))]
-            let bottom = monitor_y + monitor.size().height as f64 / scale;
+    let x = if settings.overlay_position.is_left() {
+        monitor_x + OVERLAY_EDGE_OFFSET
+    } else {
+        monitor_x + monitor_width - width - OVERLAY_EDGE_OFFSET
+    };
+    let y = if settings.overlay_position.is_top() {
+        monitor_y + OVERLAY_TOP_OFFSET
+    } else {
+        // work_area.position shares monitor.position's global coordinate
+        // space, so no monitor offset is added.
+        #[cfg(target_os = "macos")]
+        let bottom = {
+            let wa = monitor.work_area();
+            (wa.position.y as f64 + wa.size.height as f64) / scale
+        };
+        #[cfg(not(target_os = "macos"))]
+        let bottom = monitor_y + monitor.size().height as f64 / scale;
 
-            bottom - height - OVERLAY_BOTTOM_OFFSET
-        }
+        bottom - height - OVERLAY_BOTTOM_OFFSET
     };
 
     Some((x, y))
@@ -293,21 +298,78 @@ fn windows_overlay_bounds(
     logical_width: f64,
     logical_height: f64,
     overlay_position: OverlayPosition,
+    caret_rect: Option<(i32, i32, i32, i32)>,
 ) -> (i32, i32, i32, i32) {
     let width = (logical_width * scale).round().max(1.0) as i32;
     let height = (logical_height * scale).round().max(1.0) as i32;
-    let x = (monitor_position.x as f64 + monitor_size.width as f64
-        - width as f64
-        - OVERLAY_RIGHT_OFFSET * scale)
-        .round() as i32;
-    let y = match overlay_position {
-        OverlayPosition::Top => {
-            (monitor_position.y as f64 + OVERLAY_TOP_OFFSET * scale).round() as i32
+    if overlay_position == OverlayPosition::Field {
+        if let Some(caret_rect) = caret_rect {
+            return field_overlay_bounds(
+                monitor_position,
+                monitor_size,
+                scale,
+                width,
+                height,
+                caret_rect,
+            );
         }
-        OverlayPosition::Bottom => (monitor_position.y as f64 + monitor_size.height as f64
+    }
+
+    let x = if overlay_position.is_left() {
+        (monitor_position.x as f64 + OVERLAY_EDGE_OFFSET * scale).round() as i32
+    } else {
+        (monitor_position.x as f64 + monitor_size.width as f64
+            - width as f64
+            - OVERLAY_EDGE_OFFSET * scale)
+            .round() as i32
+    };
+    let y = if overlay_position.is_top() {
+        (monitor_position.y as f64 + OVERLAY_TOP_OFFSET * scale).round() as i32
+    } else {
+        (monitor_position.y as f64 + monitor_size.height as f64
             - height as f64
             - OVERLAY_BOTTOM_OFFSET * scale)
-            .round() as i32,
+            .round() as i32
+    };
+
+    (x, y, width, height)
+}
+
+/// Centers a field-adjacent overlay on the caret. Prefer the right side, then
+/// the left, and clamp within the monitor so the indicator remains fully visible.
+#[cfg(target_os = "windows")]
+fn field_overlay_bounds(
+    monitor_position: PhysicalPosition<i32>,
+    monitor_size: PhysicalSize<u32>,
+    scale: f64,
+    width: i32,
+    height: i32,
+    (caret_left, caret_top, caret_right, caret_bottom): (i32, i32, i32, i32),
+) -> (i32, i32, i32, i32) {
+    let gap = (OVERLAY_FIELD_GAP * scale).round() as i32;
+    let gutter = (OVERLAY_FIELD_GUTTER * scale).round() as i32;
+    let monitor_right = monitor_position.x + monitor_size.width as i32;
+    let monitor_bottom = monitor_position.y + monitor_size.height as i32;
+    let min_x = monitor_position.x + gutter;
+    let max_x = monitor_right - width - gutter;
+    let min_y = monitor_position.y + gutter;
+    let max_y = monitor_bottom - height - gutter;
+    let right_fits = caret_right + gap + width <= monitor_right - gutter;
+    let desired_x = if right_fits {
+        caret_right + gap
+    } else {
+        caret_left - gap - width
+    };
+    let desired_y = caret_top + (caret_bottom - caret_top - height) / 2;
+    let x = if min_x <= max_x {
+        desired_x.clamp(min_x, max_x)
+    } else {
+        monitor_position.x
+    };
+    let y = if min_y <= max_y {
+        desired_y.clamp(min_y, max_y)
+    } else {
+        monitor_position.y
     };
 
     (x, y, width, height)
@@ -324,7 +386,13 @@ fn place_windows_overlay(
 ) -> Result<(), String> {
     use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
 
-    let monitor = get_monitor_with_cursor(app_handle)
+    let overlay_position = settings::get_settings(app_handle).overlay_position;
+    let caret_rect = (overlay_position == OverlayPosition::Field)
+        .then(input::get_text_caret_rect)
+        .flatten();
+    let monitor = caret_rect
+        .and_then(|(left, top, _, _)| get_monitor_at_position(app_handle, (left, top)))
+        .or_else(|| get_monitor_with_cursor(app_handle))
         .ok_or_else(|| "failed to determine the monitor containing the cursor".to_string())?;
     let (x, y, width, height) = windows_overlay_bounds(
         *monitor.position(),
@@ -332,7 +400,8 @@ fn place_windows_overlay(
         monitor.scale_factor(),
         logical_width,
         logical_height,
-        settings::get_settings(app_handle).overlay_position,
+        overlay_position,
+        caret_rect,
     );
     let hwnd = overlay_window
         .hwnd()
@@ -464,7 +533,7 @@ pub fn create_recording_overlay(app_handle: &AppHandle) {
 
 fn show_overlay_state(app_handle: &AppHandle, state: &str) {
     // Whether the overlay shows at all is governed by overlay_style; position
-    // only chooses Top vs Bottom placement. Checked here (off the main thread)
+    // only chooses where the visible overlay sits. Checked here (off the main thread)
     // so the common overlay-disabled case never pays for a main-thread hop.
     let settings = settings::get_settings(app_handle);
     if settings.overlay_style == OverlayStyle::None {
@@ -731,7 +800,8 @@ mod tests {
                 1.5,
                 OVERLAY_WIDTH,
                 OVERLAY_HEIGHT,
-                OverlayPosition::Bottom,
+                OverlayPosition::BottomRight,
+                None,
             ),
             (5244, 1998, 480, 102)
         );
@@ -742,7 +812,8 @@ mod tests {
                 1.5,
                 OVERLAY_WIDTH,
                 OVERLAY_HEIGHT,
-                OverlayPosition::Top,
+                OverlayPosition::TopRight,
+                None,
             ),
             (5244, 6, 480, 102)
         );
@@ -758,9 +829,59 @@ mod tests {
                 1.25,
                 OVERLAY_STREAM_WIDTH,
                 OVERLAY_STREAM_HEIGHT,
-                OverlayPosition::Bottom,
+                OverlayPosition::BottomRight,
+                None,
             ),
             (-645, 985, 615, 205)
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn field_overlay_prefers_space_to_the_right_of_the_caret() {
+        assert_eq!(
+            windows_overlay_bounds(
+                PhysicalPosition::new(0, 0),
+                PhysicalSize::new(1920, 1080),
+                1.0,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
+                OverlayPosition::Field,
+                Some((400, 300, 402, 320)),
+            ),
+            (414, 276, 320, 68)
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn corner_positions_anchor_to_the_requested_screen_edge() {
+        let monitor_position = PhysicalPosition::new(0, 0);
+        let monitor_size = PhysicalSize::new(1920, 1080);
+
+        assert_eq!(
+            windows_overlay_bounds(
+                monitor_position,
+                monitor_size,
+                1.0,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
+                OverlayPosition::TopLeft,
+                None,
+            ),
+            (24, 4, 320, 68)
+        );
+        assert_eq!(
+            windows_overlay_bounds(
+                monitor_position,
+                monitor_size,
+                1.0,
+                OVERLAY_WIDTH,
+                OVERLAY_HEIGHT,
+                OverlayPosition::BottomLeft,
+                None,
+            ),
+            (24, 972, 320, 68)
         );
     }
 }

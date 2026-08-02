@@ -373,8 +373,11 @@
           "title": "Overlay Position",
           "description": "Where the overlay appears on screen during recording and transcription.",
           "options": {
-            "bottom": "Bottom",
-            "top": "Top"
+            "field": "Near text field",
+            "topLeft": "Top left",
+            "topRight": "Top right",
+            "bottomLeft": "Bottom left",
+            "bottomRight": "Bottom right"
           }
         }
       },

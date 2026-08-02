@@ -22,6 +22,52 @@ pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
     enigo.location().ok()
 }
 
+/// Returns the active application's text caret in screen pixels on Windows.
+///
+/// `GetGUIThreadInfo` exposes the caret owned by the foreground GUI thread;
+/// converting its client rectangle keeps the recording indicator next to the
+/// field that will receive the transcript without moving focus.
+#[cfg(target_os = "windows")]
+pub fn get_text_caret_rect() -> Option<(i32, i32, i32, i32)> {
+    use std::mem::size_of;
+    use windows::Win32::{
+        Foundation::POINT,
+        Graphics::Gdi::ClientToScreen,
+        UI::WindowsAndMessaging::{GetGUIThreadInfo, GUITHREADINFO},
+    };
+
+    let mut info = GUITHREADINFO {
+        cbSize: size_of::<GUITHREADINFO>() as u32,
+        ..Default::default()
+    };
+    unsafe { GetGUIThreadInfo(0, &mut info).ok()? };
+    if info.hwndCaret.0.is_null() {
+        return None;
+    }
+
+    let mut top_left = POINT {
+        x: info.rcCaret.left,
+        y: info.rcCaret.top,
+    };
+    let mut bottom_right = POINT {
+        x: info.rcCaret.right,
+        y: info.rcCaret.bottom,
+    };
+    let top_left_converted = unsafe { ClientToScreen(info.hwndCaret, &mut top_left) }.as_bool();
+    let bottom_right_converted =
+        unsafe { ClientToScreen(info.hwndCaret, &mut bottom_right) }.as_bool();
+    if !top_left_converted || !bottom_right_converted {
+        return None;
+    }
+
+    Some((
+        top_left.x.min(bottom_right.x),
+        top_left.y.min(bottom_right.y),
+        top_left.x.max(bottom_right.x),
+        top_left.y.max(bottom_right.y),
+    ))
+}
+
 /// Sends a Ctrl+V or Cmd+V paste command using platform-specific virtual key codes.
 /// This ensures the paste works regardless of keyboard layout (e.g., Russian, AZERTY, DVORAK).
 /// Note: On Wayland, this may not work - callers should check for Wayland and use alternative methods.

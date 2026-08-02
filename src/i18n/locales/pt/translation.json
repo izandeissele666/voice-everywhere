@@ -295,8 +295,11 @@
           "title": "Posição da Sobreposição",
           "description": "Exibir sobreposição de feedback visual durante gravação e transcrição. No Linux, 'Nenhum' é recomendado.",
           "options": {
-            "bottom": "Inferior",
-            "top": "Superior"
+            "field": "Junto ao campo de texto",
+            "topLeft": "Canto superior esquerdo",
+            "topRight": "Canto superior direito",
+            "bottomLeft": "Canto inferior esquerdo",
+            "bottomRight": "Canto inferior direito"
           }
         }
       },

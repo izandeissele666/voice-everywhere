@@ -295,8 +295,11 @@
           "title": "Overlay-Position",
           "description": "Visuelles Feedback-Overlay während Aufnahme und Transkription anzeigen. Unter Linux wird 'Keine' empfohlen.",
           "options": {
-            "bottom": "Unten",
-            "top": "Oben"
+            "field": "Neben dem Textfeld",
+            "topLeft": "Oben links",
+            "topRight": "Oben rechts",
+            "bottomLeft": "Unten links",
+            "bottomRight": "Unten rechts"
           }
         }
       },

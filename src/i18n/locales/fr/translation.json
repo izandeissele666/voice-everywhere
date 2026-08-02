@@ -295,8 +295,11 @@
           "title": "Position de la fenêtre d'enregistrement",
           "description": "Afficher un retour visuel pendant l'enregistrement et la transcription. Sur Linux, 'Aucune' est recommandé.",
           "options": {
-            "bottom": "Bas",
-            "top": "Haut"
+            "field": "Près du champ de texte",
+            "topLeft": "En haut à gauche",
+            "topRight": "En haut à droite",
+            "bottomLeft": "En bas à gauche",
+            "bottomRight": "En bas à droite"
           }
         }
       },

@@ -295,8 +295,11 @@
           "title": "Overlay Konumu",
           "description": "Kayıt ve transkripsiyon sırasında görsel geri bildirim kaplamasını gösterir. Linux'ta 'Yok' önerilir.",
           "options": {
-            "bottom": "Alt",
-            "top": "Üst"
+            "field": "Metin alanının yanında",
+            "topLeft": "Sol üst",
+            "topRight": "Sağ üst",
+            "bottomLeft": "Sol alt",
+            "bottomRight": "Sağ alt"
           }
         }
       },

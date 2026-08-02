@@ -295,8 +295,11 @@
           "title": "Pozice překryvu",
           "description": "Zobrazovat vizuální překryv během nahrávání a přepisu. Na Linuxu je doporučeno 'Žádné'.",
           "options": {
-            "bottom": "Dole",
-            "top": "Nahoře"
+            "field": "U textového pole",
+            "topLeft": "Vlevo nahoře",
+            "topRight": "Vpravo nahoře",
+            "bottomLeft": "Vlevo dole",
+            "bottomRight": "Vpravo dole"
           }
         }
       },

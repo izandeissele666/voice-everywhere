@@ -295,8 +295,11 @@
           "title": "オーバーレイの位置",
           "description": "録音と文字起こし中に表示するオーバーレイが表示される位置を選択します。",
           "options": {
-            "bottom": "下",
-            "top": "上"
+            "field": "テキスト欄の近く",
+            "topLeft": "左上",
+            "topRight": "右上",
+            "bottomLeft": "左下",
+            "bottomRight": "右下"
           }
         }
       },

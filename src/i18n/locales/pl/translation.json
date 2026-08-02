@@ -295,8 +295,11 @@
           "title": "Pozycja nakładki",
           "description": "Wyświetlaj wizualną nakładkę podczas nagrywania i transkrypcji. Na Linuxie zalecane 'Brak'.",
           "options": {
-            "bottom": "Dół",
-            "top": "Góra"
+            "field": "Przy polu tekstowym",
+            "topLeft": "U góry po lewej",
+            "topRight": "U góry po prawej",
+            "bottomLeft": "Na dole po lewej",
+            "bottomRight": "Na dole po prawej"
           }
         }
       },

@@ -295,8 +295,11 @@
           "title": "懸浮窗位置",
           "description": "在錄製和轉錄期間顯示視覺回饋懸浮窗。在 Linux 上建議選擇「無」",
           "options": {
-            "bottom": "底部",
-            "top": "頂部"
+            "field": "文字欄位旁邊",
+            "topLeft": "左上角",
+            "topRight": "右上角",
+            "bottomLeft": "左下角",
+            "bottomRight": "右下角"
           }
         }
       },

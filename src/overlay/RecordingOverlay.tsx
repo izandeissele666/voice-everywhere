@@ -8,6 +8,7 @@ import type {
   StreamPhaseEvent,
   StreamTextEvent,
   StreamWorkKind,
+  OverlayPosition,
 } from "@/bindings";
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
@@ -36,9 +37,8 @@ const RecordingOverlay: React.FC = () => {
   // Bumped on each new streaming session so the Live card remounts fresh (replays
   // the pop-in, and never animates in from the previous panel's open size).
   const [session, setSession] = useState(0);
-  // Overlay placement (top vs bottom of the screen). The Live panel grows downward
-  // from a top overlay (oldest line under the pill) and upward from a bottom one.
-  const [position, setPosition] = useState<"top" | "bottom">("bottom");
+  // The Live panel grows down from top/field placements and up from bottom ones.
+  const [position, setPosition] = useState<OverlayPosition>("field");
   // True once live text overflows the cap. A top overlay fades its top edge only
   // while overflowing, so the resting first line stays crisp flush under the pill.
   const [overflowing, setOverflowing] = useState(false);
@@ -55,16 +55,13 @@ const RecordingOverlay: React.FC = () => {
     const setupEventListeners = async () => {
       const unlistenShow = await listen("show-overlay", async (event) => {
         await syncLanguageFromSettings();
-        // The Live panel flows downward from a top overlay and upward from a
-        // bottom one; read the placement so the layout can flip to match.
+        // Read the placement so the Live panel grows away from its chosen edge.
         try {
           const settings = await commands.getAppSettings();
           if (settings.status === "ok") {
             applyTheme(settings.data.theme ?? "system");
             applyAccentColor(settings.data.accent_color ?? "violet");
-            setPosition(
-              settings.data.overlay_position === "top" ? "top" : "bottom",
-            );
+            setPosition(settings.data.overlay_position ?? "field");
           }
         } catch {
           // Keep the previous/default placement if settings can't be read.
@@ -230,9 +227,7 @@ const RecordingOverlay: React.FC = () => {
           key={session}
           className={`scard ${open ? "open" : ""} ${
             collapsed ? `working ring-${WORKING_RING_STYLE}` : ""
-          } ${
-            isVisible ? "" : "leaving"
-          }`}
+          } ${isVisible ? "" : "leaving"}`}
         >
           {collapsed && (
             <svg className="swork-orbit" aria-hidden="true">

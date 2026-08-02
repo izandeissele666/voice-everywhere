@@ -295,8 +295,11 @@
           "title": "Overlay-positie",
           "description": "Waar de overlay op het scherm verschijnt tijdens het opnemen en transcriberen.",
           "options": {
-            "bottom": "Onderkant",
-            "top": "Bovenkant"
+            "field": "Naast het tekstveld",
+            "topLeft": "Linksboven",
+            "topRight": "Rechtsboven",
+            "bottomLeft": "Linksonder",
+            "bottomRight": "Rechtsonder"
           }
         }
       },

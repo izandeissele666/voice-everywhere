@@ -107,15 +107,30 @@ pub struct PostProcessProvider {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum OverlayPosition {
-    Top,
+    /// Place the overlay beside the focused text caret when Windows exposes it.
+    Field,
+    TopLeft,
+    #[serde(alias = "top")]
+    TopRight,
+    BottomLeft,
     // `none` is retired: overlay visibility is owned by `OverlayStyle` now. The
     // alias keeps legacy stores (`"overlay_position": "none"`) deserializing
     // instead of failing the whole load; the one-time overlay migration reads the
     // raw stored string to recover the old "hidden" intent as `OverlayStyle::None`.
-    #[serde(alias = "none")]
-    Bottom,
+    #[serde(alias = "bottom", alias = "none")]
+    BottomRight,
+}
+
+impl OverlayPosition {
+    pub fn is_top(self) -> bool {
+        matches!(self, Self::TopLeft | Self::TopRight)
+    }
+
+    pub fn is_left(self) -> bool {
+        matches!(self, Self::TopLeft | Self::BottomLeft)
+    }
 }
 
 /// Which recording overlay to display. `Minimal` and `Live` share one base
@@ -558,9 +573,10 @@ fn default_selected_language() -> String {
 }
 
 fn default_overlay_position() -> OverlayPosition {
-    // Position only matters when the overlay is shown; whether it shows at all is
-    // `overlay_style` (Linux defaults that to None). So a single default suffices.
-    OverlayPosition::Bottom
+    // Windows uses the active text caret so the recording state stays close to
+    // where the transcript will land. Other platforms safely fall back to the
+    // lower-right corner when a system caret is unavailable.
+    OverlayPosition::Field
 }
 
 fn default_overlay_style() -> OverlayStyle {
@@ -1464,20 +1480,20 @@ mod tests {
     }
 
     #[test]
-    fn legacy_none_overlay_position_deserializes_to_bottom() {
+    fn legacy_none_overlay_position_deserializes_to_bottom_right() {
         // A persisted "none" must not fail the whole settings load; the serde
-        // alias folds it onto Bottom (visibility is owned by overlay_style).
+        // alias folds it onto BottomRight (visibility is owned by overlay_style).
         let raw = serde_json::json!({ "overlay_position": "none" });
         let position: OverlayPosition =
             serde_json::from_value(raw.get("overlay_position").unwrap().clone())
                 .expect("legacy \"none\" should deserialize, not error");
-        assert_eq!(position, OverlayPosition::Bottom);
+        assert_eq!(position, OverlayPosition::BottomRight);
     }
 
     #[test]
     fn overlay_migration_promotes_enabled_overlay_to_live() {
         let mut settings = get_default_settings();
-        settings.overlay_position = OverlayPosition::Top;
+        settings.overlay_position = OverlayPosition::TopRight;
         settings.overlay_style = OverlayStyle::Minimal;
 
         let raw = serde_json::json!({
@@ -1487,7 +1503,15 @@ mod tests {
 
         assert!(apply_settings_migrations(&mut settings, &raw));
         assert_eq!(settings.overlay_style, OverlayStyle::Live);
-        assert_eq!(settings.overlay_position, OverlayPosition::Top);
+        assert_eq!(settings.overlay_position, OverlayPosition::TopRight);
+    }
+
+    #[test]
+    fn fresh_installs_place_the_overlay_next_to_the_text_field() {
+        assert_eq!(
+            get_default_settings().overlay_position,
+            OverlayPosition::Field
+        );
     }
 
     #[test]

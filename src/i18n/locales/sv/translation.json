@@ -295,8 +295,11 @@
           "title": "Överlagringsposition",
           "description": "Visa visuell återkoppling under inspelning och transkription. På Linux rekommenderas 'Ingen'.",
           "options": {
-            "bottom": "Nederst",
-            "top": "Överst"
+            "field": "Vid textfältet",
+            "topLeft": "Överst till vänster",
+            "topRight": "Överst till höger",
+            "bottomLeft": "Nederst till vänster",
+            "bottomRight": "Nederst till höger"
           }
         }
       },

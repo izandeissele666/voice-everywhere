@@ -295,8 +295,11 @@
           "title": "Vị trí lớp phủ",
           "description": "Hiển thị lớp phủ phản hồi trực quan trong quá trình ghi âm và chuyển đổi. Trên Linux, 'Không có' được khuyến nghị.",
           "options": {
-            "bottom": "Dưới",
-            "top": "Trên"
+            "field": "Cạnh trường văn bản",
+            "topLeft": "Trên cùng bên trái",
+            "topRight": "Trên cùng bên phải",
+            "bottomLeft": "Dưới cùng bên trái",
+            "bottomRight": "Dưới cùng bên phải"
           }
         }
       },

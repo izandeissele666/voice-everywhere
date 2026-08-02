@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.5 - 2026-08-02
+
+- The recording overlay now appears beside the active text field by default on Windows.
+- Choose the active text field or any of the four screen corners in Settings.
+
 ## 0.9.4 - 2026-08-02
 
 First public Voice Everywhere release.

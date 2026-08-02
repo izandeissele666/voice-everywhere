@@ -1021,7 +1021,7 @@ sha256: string | null } } |
 "Local"
 export type ModelUnloadTimeout = "never" | "immediately" | "min_2" | "min_5" | "min_10" | "min_15" | "hour_1" | "sec_15"
 export type OrtAcceleratorSetting = "auto" | "cpu" | "cuda" | "directml" | "rocm"
-export type OverlayPosition = "top" | "bottom"
+export type OverlayPosition = "field" | "top_left" | "top_right" | "bottom_left" | "bottom_right"
 /**
  * Which recording overlay to display. `Minimal` and `Live` share one base
  * (the pill); `Live` grows into the panel that shows live transcription text.

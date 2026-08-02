@@ -651,20 +651,23 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
 pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     let parsed = match position.as_str() {
-        // "none" is retired (visibility is overlay_style now); fold legacy callers
-        // onto Bottom rather than warn.
-        "none" | "bottom" => OverlayPosition::Bottom,
-        "top" => OverlayPosition::Top,
+        // Old top/bottom values remain accepted so settings from earlier releases
+        // retain their previous right-corner placement.
+        "field" => OverlayPosition::Field,
+        "top_left" => OverlayPosition::TopLeft,
+        "top" | "top_right" => OverlayPosition::TopRight,
+        "bottom_left" => OverlayPosition::BottomLeft,
+        "none" | "bottom" | "bottom_right" => OverlayPosition::BottomRight,
         other => {
-            warn!("Invalid overlay position '{}', defaulting to bottom", other);
-            OverlayPosition::Bottom
+            warn!("Invalid overlay position '{}', defaulting to field", other);
+            OverlayPosition::Field
         }
     };
     settings.overlay_position = parsed;
     settings::write_settings(&app, settings);
 
-    // Whether the overlay shows at all is owned by overlay_style now; position
-    // only ever toggles Top/Bottom, so the enabled cache is untouched here.
+    // Whether the overlay shows at all is owned by overlay_style, so position
+    // changes only move the existing overlay and leave the enabled cache alone.
     // Update overlay position without recreating window
     crate::utils::update_overlay_position(&app);
 

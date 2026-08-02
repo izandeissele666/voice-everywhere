@@ -1,6 +1,6 @@
 [package]
 name = "voice-everywhere"
-version = "0.9.4"
+version = "0.9.5"
 description = "Voice Everywhere - local Windows dictation"
 authors = ["cjpais"]
 edition = "2021"

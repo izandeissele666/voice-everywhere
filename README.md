@@ -15,7 +15,7 @@ Voice Everywhere turns speech into text on your computer. Press a global shortcu
 
 ## Highlights
 
-- Local dictation with global shortcuts and a compact recording overlay.
+- Local dictation with global shortcuts and a compact recording overlay beside the active text field or in any screen corner.
 - Tray-first workflow: autostart launches silently to the system tray.
 - File transcription for common audio formats, including WAV, MP3, FLAC, M4A, OGG, and Opus.
 - Whisper model management with GPU acceleration when available.
@@ -24,7 +24,7 @@ Voice Everywhere turns speech into text on your computer. Press a global shortcu
 
 ## Install
 
-1. Download `Voice.Everywhere_0.9.4_x64-setup.exe` from [Releases](https://github.com/izandeissele666/voice-everywhere/releases).
+1. Download `Voice.Everywhere_0.9.5_x64-setup.exe` from [Releases](https://github.com/izandeissele666/voice-everywhere/releases).
 2. Run the installer and grant microphone access when Windows asks.
 3. Pick or download a model during onboarding, then use the configured global shortcut.
 

@@ -72,10 +72,9 @@
 
 /* ============================================================
    Unified overlay stage — one fixed, transparent container shared by the compact
-   pill and the Live panel (both render the same `.scard` base). The card is
-   anchored flush to the lower-right screen edge (or upper-right when configured
-   at the top), so the visible card sits exactly at the native offsets regardless
-   of window size. Pops scale from that corner, so the card is never drawn past it.
+   pill and the Live panel (both render the same `.scard` base). Corner placements
+   pin the card to the matching window edge; field placement starts at the window's
+   top-left so native code can place it next to the focused text caret.
    ============================================================ */
 .ov-stage {
   position: fixed;
@@ -87,9 +86,21 @@
   padding: 0 5px 5px 0;
   font-family: var(--s-font);
 }
-.ov-stage.top {
+.ov-stage.top_left,
+.ov-stage.top_right {
   align-items: flex-start; /* top placement: flush to the top edge */
   padding: 5px 5px 0 0;
+}
+.ov-stage.top_left,
+.ov-stage.bottom_left {
+  justify-content: flex-start;
+  padding-left: 5px;
+  padding-right: 0;
+}
+.ov-stage.field {
+  justify-content: flex-start;
+  align-items: flex-start;
+  padding: 5px;
 }
 
 /* Compact pill: fade the whole container in/out (the pill itself never pops or
@@ -105,10 +116,14 @@
   opacity: 1;
   transform: none;
 }
-.ov-fade.top {
+.ov-fade.top_left,
+.ov-fade.top_right,
+.ov-fade.field {
   transform: translateY(-7px) scale(0.97);
 }
-.ov-fade.top.show {
+.ov-fade.top_left.show,
+.ov-fade.top_right.show,
+.ov-fade.field.show {
   transform: none;
 }
 
@@ -117,12 +132,20 @@
    the bottom) — mirroring the bottom overlay's upward flow. The compact pill has
    no flowing text, so this only affects the Live panel. The text region keeps the
    same fade + scroll-pin; older lines dissolve up under the pill. */
-.ov-stage.top .scard {
+.ov-stage.top_left .scard,
+.ov-stage.top_right .scard,
+.ov-stage.field .scard {
   /* column-reverse stacks the control pill above the text region. */
   flex-direction: column-reverse;
   transform-origin: top right;
 }
-.ov-stage.top .stext-cap {
+.ov-stage.top_left .scard,
+.ov-stage.field .scard {
+  transform-origin: top left;
+}
+.ov-stage.top_left .stext-cap,
+.ov-stage.top_right .stext-cap,
+.ov-stage.field .stext-cap {
   /* Mirror of the bottom overlay (top: 12 / bottom: 0): the first line sits flush
      under the pill and the breathing room moves below the text. The top fade is
      off at rest — at zero top padding it would dim the resting first line — and
@@ -135,11 +158,15 @@
 /* Once live text overflows, fade older lines up under the pill, matching the
    bottom overlay's top fade. Gated on `.overflowing` so a short resting line
    (sitting at the very top) is never dimmed. */
-.ov-stage.top .stext-cap.overflowing {
+.ov-stage.top_left .stext-cap.overflowing,
+.ov-stage.top_right .stext-cap.overflowing,
+.ov-stage.field .stext-cap.overflowing {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
   mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
 }
-.ov-stage.top .stext-cap p {
+.ov-stage.top_left .stext-cap p,
+.ov-stage.top_right .stext-cap p,
+.ov-stage.field .stext-cap p {
   /* Top-anchor short text just under the pill; on overflow the cap still pins to
      the bottom (newest visible) and older lines fade off the top, same as bottom. */
   margin: 0;
@@ -163,6 +190,9 @@
     width 460ms cubic-bezier(0.22, 1, 0.36, 1),
     border-radius 460ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform, width, opacity;
+}
+.ov-stage.bottom_left .scard {
+  transform-origin: bottom left;
 }
 @keyframes scard-pop {
   from {

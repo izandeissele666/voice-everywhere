@@ -295,8 +295,11 @@
           "title": "Posición de superposición",
           "description": "Dónde aparece la superposición en la pantalla durante la grabación y la transcripción.",
           "options": {
-            "bottom": "Abajo",
-            "top": "Arriba"
+            "field": "Junto al campo de texto",
+            "topLeft": "Arriba a la izquierda",
+            "topRight": "Arriba a la derecha",
+            "bottomLeft": "Abajo a la izquierda",
+            "bottomRight": "Abajo a la derecha"
           }
         }
       },
