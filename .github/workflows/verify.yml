@@ -32,6 +32,12 @@ jobs:
         with:
           version: 1.4.309.0
           cache: true
+      - name: Install SPIRV-Headers
+        shell: pwsh
+        run: |
+          vcpkg install spirv-headers:x64-windows
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows" -replace '\\', '/'
+          Add-Content $env:GITHUB_ENV "CMAKE_PREFIX_PATH=$prefix"
       - name: Check formatting
         working-directory: src-tauri
         run: cargo fmt -- --check
