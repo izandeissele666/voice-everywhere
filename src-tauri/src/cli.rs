@@ -2,7 +2,10 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Clone, Default)]
-#[command(name = "handy", about = "Handy - Speech to Text")]
+#[command(
+    name = "voice-everywhere",
+    about = "Voice Everywhere - local speech to text"
+)]
 pub struct CliArgs {
     /// Start with the main window hidden
     #[arg(long)]
@@ -52,6 +55,11 @@ pub struct CliArgs {
     /// Honors --json for machine-readable output.
     #[arg(long)]
     pub list_models: bool,
+
+    /// Download a catalog model locally and exit. The model id is listed by
+    /// --list-models and uses the same download path as the app.
+    #[arg(long, value_name = "MODEL_ID")]
+    pub download_model: Option<String>,
 
     /// Repeat the transcription N times (best_ms reports the fastest run).
     #[arg(long, value_name = "N")]

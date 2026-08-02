@@ -1182,6 +1182,7 @@ impl TranscriptionManager {
         // with INVALID_ARG, so the whisper extension must be gated on the
         // arch, not on the feature (see #1601).
         let mut model_is_whisper = false;
+        let mut model_is_qwen3_asr = false;
 
         // Perform transcription with the appropriate engine.
         // We use catch_unwind to prevent engine panics from poisoning the mutex,
@@ -1216,6 +1217,7 @@ impl TranscriptionManager {
                 let caps = model.capabilities();
                 model_takes_initial_prompt = model.supports(Feature::InitialPrompt);
                 model_is_whisper = model.arch() == "whisper";
+                model_is_qwen3_asr = model.arch() == "qwen3_asr";
                 model_supports_translate = caps.supports_translate;
                 model_languages = caps.languages;
                 debug!(
@@ -1267,12 +1269,47 @@ impl TranscriptionManager {
                             run_options.family.is_some()
                         );
 
-                        session
-                            .run(&audio, &run_options)
-                            .map(|t| t.text)
-                            .map_err(|e| {
-                                anyhow::anyhow!("transcribe-cpp transcription failed: {}", e)
-                            })
+                        if !model_is_qwen3_asr || audio.len() <= 20 * 16_000 {
+                            return session.run(&audio, &run_options).map(|t| t.text).map_err(
+                                |e| anyhow::anyhow!("transcribe-cpp transcription failed: {}", e),
+                            );
+                        }
+
+                        // Qwen3-ASR's decoder has a fixed generation budget. Long,
+                        // fast speech can exhaust it before EOS, so transcribe bounded
+                        // PCM windows and retry a truncated window at half the size.
+                        let mut parts = Vec::new();
+                        let mut offset = 0;
+                        let mut window_samples = 20 * 16_000;
+                        const MIN_QWEN_WINDOW_SAMPLES: usize = 5 * 16_000;
+                        while offset < audio.len() {
+                            let end = (offset + window_samples).min(audio.len());
+                            match session.run(&audio[offset..end], &run_options) {
+                                Ok(transcript) => {
+                                    parts.push(transcript.text);
+                                    offset = end;
+                                }
+                                Err(_error)
+                                    if session.was_truncated()
+                                        && window_samples > MIN_QWEN_WINDOW_SAMPLES =>
+                                {
+                                    window_samples =
+                                        (window_samples / 2).max(MIN_QWEN_WINDOW_SAMPLES);
+                                    log::warn!(
+                                        "Qwen3-ASR truncated at {} samples; retrying with {} samples",
+                                        end - offset,
+                                        window_samples
+                                    );
+                                }
+                                Err(error) => {
+                                    return Err(anyhow::anyhow!(
+                                        "transcribe-cpp transcription failed: {}",
+                                        error
+                                    ));
+                                }
+                            }
+                        }
+                        Ok(parts.join(" "))
                     }
                     LoadedEngine::Parakeet(parakeet_engine) => {
                         let params = ParakeetParams {
@@ -1947,6 +1984,25 @@ pub struct AvailableAccelerators {
     pub transcribe: Vec<String>,
     pub ort: Vec<String>,
     pub gpu_devices: Vec<GpuDeviceOption>,
+    pub total_system_memory_mb: usize,
+}
+
+#[cfg(target_os = "windows")]
+fn total_system_memory_mb() -> usize {
+    use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+
+    let mut memory = MEMORYSTATUSEX::default();
+    memory.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+    unsafe {
+        GlobalMemoryStatusEx(&mut memory)
+            .map(|()| (memory.ullTotalPhys / (1024 * 1024)) as usize)
+            .unwrap_or(0)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn total_system_memory_mb() -> usize {
+    0
 }
 
 /// Return the accelerators available to this process on its current host.
@@ -1964,6 +2020,7 @@ pub fn get_available_accelerators() -> AvailableAccelerators {
         transcribe: transcribe_options,
         ort: ort_options,
         gpu_devices: cached_gpu_devices().to_vec(),
+        total_system_memory_mb: total_system_memory_mb(),
     }
 }
 
@@ -1991,6 +2048,12 @@ mod tests {
         for kind in ["cpu", "accel", "metal", "cuda", "vulkan", "gpu"] {
             assert!(transcribe_device_allowed(kind, false));
         }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn reads_total_system_memory_for_hardware_recommendations() {
+        assert!(total_system_memory_mb() > 0);
     }
 
     #[test]

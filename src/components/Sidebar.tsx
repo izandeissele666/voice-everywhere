@@ -1,18 +1,11 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
-import HandyTextLogo from "./icons/HandyTextLogo";
-import HandyHand from "./icons/HandyHand";
-import { useSettings } from "../hooks/useSettings";
-import {
-  GeneralSettings,
-  AdvancedSettings,
-  HistorySettings,
-  DebugSettings,
-  AboutSettings,
-  PostProcessingSettings,
-  ModelsSettings,
-} from "./settings";
+import { Cpu, FileAudio, Mic, Settings } from "lucide-react";
+import { ModelsSettings } from "./settings";
+import FileTranscription from "./FileTranscription";
+import DictationHome from "./DictationHome";
+import VoiceSettings from "./VoiceSettings";
+import BrandMark from "./BrandMark";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -28,51 +21,28 @@ interface SectionConfig {
   labelKey: string;
   icon: React.ComponentType<IconProps>;
   component: React.ComponentType;
-  enabled: (settings: any) => boolean;
 }
 
 export const SECTIONS_CONFIG = {
-  general: {
-    labelKey: "sidebar.general",
-    icon: HandyHand,
-    component: GeneralSettings,
-    enabled: () => true,
+  dictation: {
+    labelKey: "sidebar.dictation",
+    icon: Mic,
+    component: DictationHome,
   },
-  history: {
-    labelKey: "sidebar.history",
-    icon: History,
-    component: HistorySettings,
-    enabled: () => true,
+  file: {
+    labelKey: "sidebar.file",
+    icon: FileAudio,
+    component: FileTranscription,
   },
   models: {
     labelKey: "sidebar.models",
     icon: Cpu,
     component: ModelsSettings,
-    enabled: () => true,
   },
-  advanced: {
-    labelKey: "sidebar.advanced",
-    icon: Cog,
-    component: AdvancedSettings,
-    enabled: () => true,
-  },
-  postprocessing: {
-    labelKey: "sidebar.postProcessing",
-    icon: Sparkles,
-    component: PostProcessingSettings,
-    enabled: (settings) => settings?.post_process_enabled ?? false,
-  },
-  debug: {
-    labelKey: "sidebar.debug",
-    icon: FlaskConical,
-    component: DebugSettings,
-    enabled: (settings) => settings?.debug_mode ?? false,
-  },
-  about: {
-    labelKey: "sidebar.about",
-    icon: Info,
-    component: AboutSettings,
-    enabled: () => true,
+  settings: {
+    labelKey: "sidebar.settings",
+    icon: Settings,
+    component: VoiceSettings,
   },
 } as const satisfies Record<string, SectionConfig>;
 
@@ -86,41 +56,48 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSectionChange,
 }) => {
   const { t } = useTranslation();
-  const { settings } = useSettings();
-
-  const availableSections = Object.entries(SECTIONS_CONFIG)
-    .filter(([_, config]) => config.enabled(settings))
-    .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
+  const sections = Object.entries(SECTIONS_CONFIG).map(([id, config]) => ({
+    id: id as SidebarSection,
+    ...config,
+  }));
 
   return (
-    <div className="flex flex-col w-40 h-full border-e border-mid-gray/20 items-center px-2">
-      <HandyTextLogo width={120} className="m-4" />
-      <div className="flex flex-col w-full items-center gap-1 pt-2 border-t border-mid-gray/20">
-        {availableSections.map((section) => {
+    <aside className="flex h-full w-[216px] shrink-0 flex-col border-e border-mid-gray/15 bg-mid-gray/[0.035] px-3 py-4">
+      <div className="flex items-center gap-3 px-2 py-2">
+        <BrandMark size={34} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold tracking-[-0.02em] text-text">{t("sidebar.appName")}</p>
+          <p className="mt-0.5 text-[11px] font-medium text-mid-gray">{t("sidebar.caption")}</p>
+        </div>
+      </div>
+      <nav className="mt-8 flex flex-col gap-1" aria-label={t("sidebar.navigation")}>
+        {sections.map((section) => {
           const Icon = section.icon;
           const isActive = activeSection === section.id;
 
           return (
-            <div
+            <button
+              type="button"
               key={section.id}
-              className={`flex gap-2 items-center p-2 w-full rounded-lg cursor-pointer transition-colors ${
+              aria-current={isActive ? "page" : undefined}
+              className={`relative flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-logo-primary/45 ${
                 isActive
-                  ? "bg-logo-primary/80"
-                  : "hover:bg-mid-gray/20 hover:opacity-100 opacity-85"
+                  ? "bg-logo-primary/15 text-text"
+                  : "text-mid-gray hover:bg-mid-gray/10 hover:text-text"
               }`}
               onClick={() => onSectionChange(section.id)}
             >
-              <Icon width={24} height={24} className="shrink-0" />
-              <p
-                className="text-sm font-medium truncate"
-                title={t(section.labelKey)}
-              >
-                {t(section.labelKey)}
-              </p>
-            </div>
+              {isActive && <span className="sidebar-active-rail" aria-hidden="true" />}
+              <Icon size={18} className={isActive ? "text-logo-primary" : ""} />
+              <span className="truncate" title={t(section.labelKey)}>{t(section.labelKey)}</span>
+            </button>
           );
         })}
+      </nav>
+      <div className="mt-auto rounded-2xl border border-mid-gray/15 bg-background/70 p-3">
+        <p className="text-xs font-semibold text-text">{t("sidebar.offlineTitle")}</p>
+        <p className="mt-1 text-xs leading-5 text-mid-gray">{t("sidebar.offlineDescription")}</p>
       </div>
-    </div>
+    </aside>
   );
 };

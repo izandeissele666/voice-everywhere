@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Handy App", () => {
+test.describe("Voice Everywhere", () => {
   test("dev server responds", async ({ page }) => {
     // Just verify the dev server is running and responds
     const response = await page.goto("/");
@@ -14,5 +14,11 @@ test.describe("Handy App", () => {
     const html = await page.content();
     expect(html).toContain("<html");
     expect(html).toContain("<body");
+  });
+
+  test("uses the Voice Everywhere document title", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page).toHaveTitle("Voice Everywhere");
   });
 });

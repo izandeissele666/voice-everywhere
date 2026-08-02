@@ -1,0 +1,35 @@
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run build
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:playwright
+
+  rust:
+    name: Rust
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        working-directory: src-tauri
+        run: cargo fmt -- --check
+      - name: Run library tests
+        working-directory: src-tauri
+        run: cargo test --lib

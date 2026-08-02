@@ -11,10 +11,8 @@ import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import SecureInputWarning from "./components/SecureInputWarning";
-import Footer from "./components/footer";
 import Onboarding, { AccessibilityOnboarding } from "./components/onboarding";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
-import { WhatsNewGate } from "./components/whats-new";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
@@ -22,10 +20,37 @@ import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
 type OnboardingStep = "accessibility" | "model" | "done";
 
+const SIGNAL_PARTICLES = [
+  ["7%", "13%", 2, "-2s", "11s"],
+  ["14%", "67%", 3, "-8s", "15s"],
+  ["20%", "32%", 2, "-5s", "13s"],
+  ["27%", "86%", 2, "-11s", "17s"],
+  ["33%", "20%", 3, "-4s", "12s"],
+  ["39%", "58%", 2, "-9s", "16s"],
+  ["45%", "9%", 2, "-6s", "14s"],
+  ["51%", "78%", 3, "-13s", "18s"],
+  ["57%", "38%", 2, "-1s", "10s"],
+  ["63%", "92%", 2, "-7s", "15s"],
+  ["69%", "24%", 3, "-10s", "17s"],
+  ["74%", "54%", 2, "-3s", "12s"],
+  ["79%", "11%", 2, "-12s", "16s"],
+  ["84%", "72%", 3, "-5s", "14s"],
+  ["89%", "42%", 2, "-9s", "18s"],
+  ["94%", "89%", 2, "-6s", "13s"],
+  ["11%", "46%", 2, "-14s", "19s"],
+  ["48%", "65%", 2, "-7s", "11s"],
+  ["72%", "83%", 2, "-4s", "15s"],
+  ["91%", "28%", 2, "-10s", "14s"],
+] as const;
+
 const renderSettingsContent = (section: SidebarSection) => {
   const ActiveComponent =
-    SECTIONS_CONFIG[section]?.component || SECTIONS_CONFIG.general.component;
-  return <ActiveComponent />;
+    SECTIONS_CONFIG[section]?.component || SECTIONS_CONFIG.dictation.component;
+  return (
+    <div key={section} className="page-enter flex w-full justify-center">
+      <ActiveComponent />
+    </div>
+  );
 };
 
 function App() {
@@ -37,7 +62,7 @@ function App() {
   // (vs a new user who needs full onboarding including model selection)
   const [isReturningUser, setIsReturningUser] = useState(false);
   const [currentSection, setCurrentSection] =
-    useState<SidebarSection>("general");
+    useState<SidebarSection>("dictation");
   const { settings, updateSetting } = useSettings();
   const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
@@ -288,33 +313,47 @@ function App() {
   } else if (onboardingStep === "model") {
     content = <Onboarding onModelSelected={handleModelSelected} />;
   } else {
-    content = (
-      <div
-        dir={direction}
-        className="h-screen flex flex-col select-none cursor-default"
-      >
-        <WhatsNewGate />
-        {/* Main content area that takes remaining space */}
-        <div className="flex-1 flex overflow-hidden">
-          <Sidebar
-            activeSection={currentSection}
-            onSectionChange={setCurrentSection}
-          />
-          {/* Scrollable content area */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              <div className="flex flex-col items-center p-4 gap-4">
+      content = (
+        <div
+          dir={direction}
+          className="h-screen select-none cursor-default"
+        >
+          <div className="flex h-full overflow-hidden">
+            <Sidebar
+              activeSection={currentSection}
+              onSectionChange={setCurrentSection}
+            />
+            <main className="app-main relative flex-1 overflow-y-auto">
+              <div className="app-atmosphere" aria-hidden="true">
+                <span className="app-atmosphere-orb app-atmosphere-orb-one" />
+                <span className="app-atmosphere-orb app-atmosphere-orb-two" />
+                <span className="app-atmosphere-specks" />
+                <span className="app-atmosphere-particles">
+                  {SIGNAL_PARTICLES.map(([left, top, size, delay, duration], index) => (
+                    <i
+                      key={index}
+                      className="app-atmosphere-particle"
+                      style={{
+                        left,
+                        top,
+                        width: size,
+                        height: size,
+                        animationDelay: delay,
+                        animationDuration: duration,
+                      }}
+                    />
+                  ))}
+                </span>
+              </div>
+              <div className="relative z-10 flex min-h-full flex-col items-center gap-4 px-4 pb-8">
                 <AccessibilityPermissions />
                 <SecureInputWarning />
                 {renderSettingsContent(currentSection)}
               </div>
-            </div>
+            </main>
           </div>
         </div>
-        {/* Fixed footer at bottom */}
-        <Footer />
-      </div>
-    );
+      );
   }
 
   return (

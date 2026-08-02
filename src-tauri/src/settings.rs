@@ -268,6 +268,44 @@ pub enum Theme {
     Dark,
 }
 
+/// Curated accent palettes. Persist an identifier rather than an arbitrary CSS
+/// value so the main window and overlay always share a legible palette.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum AccentColor {
+    #[default]
+    Violet,
+    Indigo,
+    Blue,
+    Azure,
+    Cyan,
+    Teal,
+    Mint,
+    Emerald,
+    Green,
+    Lime,
+    Yellow,
+    Amber,
+    Orange,
+    Tangerine,
+    Red,
+    Crimson,
+    Rose,
+    Pink,
+    Fuchsia,
+    Purple,
+    Plum,
+    Lavender,
+    Slate,
+    Steel,
+    Charcoal,
+    Black,
+    Brown,
+    Copper,
+    Sand,
+    Coral,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum TypingTool {
@@ -431,6 +469,8 @@ pub struct AppSettings {
     pub app_language: String,
     #[serde(default = "default_theme")]
     pub theme: Theme,
+    #[serde(default = "default_accent_color")]
+    pub accent_color: AccentColor,
     #[serde(default)]
     pub experimental_enabled: bool,
     #[serde(default)]
@@ -498,7 +538,7 @@ fn default_start_hidden() -> bool {
 }
 
 fn default_autostart_enabled() -> bool {
-    false
+    true
 }
 
 fn default_update_checks_enabled() -> bool {
@@ -578,6 +618,10 @@ fn default_sound_theme() -> SoundTheme {
 
 fn default_theme() -> Theme {
     Theme::System
+}
+
+fn default_accent_color() -> AccentColor {
+    AccentColor::Violet
 }
 
 fn default_post_process_enabled() -> bool {
@@ -884,6 +928,7 @@ pub fn get_default_settings() -> AppSettings {
         append_trailing_space: false,
         app_language: default_app_language(),
         theme: default_theme(),
+        accent_color: default_accent_color(),
         experimental_enabled: false,
         lazy_stream_close: false,
         keyboard_implementation: KeyboardImplementation::default(),
@@ -1048,6 +1093,14 @@ fn apply_settings_migrations(
     // migration's explicit first-run-vs-upgrade decision.
     if settings_value.get("whats_new_last_seen_version").is_none() {
         settings.whats_new_last_seen_version = String::new();
+        updated = true;
+    }
+
+    // Autostart now defaults on for new installs. A persisted settings object
+    // from an older build that lacks this field is an existing user, so retain
+    // the historical off value rather than changing their startup preference.
+    if settings_value.get("autostart_enabled").is_none() {
+        settings.autostart_enabled = false;
         updated = true;
     }
 
@@ -1365,6 +1418,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn fresh_installs_enable_autostart() {
+        assert!(get_default_settings().autostart_enabled);
+    }
+
+    #[test]
+    fn fresh_installs_keep_the_violet_accent() {
+        assert_eq!(get_default_settings().accent_color, AccentColor::Violet);
+    }
+
+    #[test]
+    fn existing_settings_missing_autostart_keep_it_off() {
+        let mut settings = get_default_settings();
+        let raw = serde_json::json!({
+            "settings_schema_version": CURRENT_SETTINGS_SCHEMA_VERSION,
+            "onboarding_completed": false,
+            "whats_new_last_seen_version": default_whats_new_last_seen_version(),
+            "overlay_style": "live"
+        });
+
+        assert!(apply_settings_migrations(&mut settings, &raw));
+        assert!(!settings.autostart_enabled);
+    }
+
     #[cfg(not(target_os = "linux"))]
     #[test]
     fn default_overlay_style_is_live_when_overlay_defaults_on() {
@@ -1450,6 +1527,7 @@ mod tests {
             "onboarding_completed": false,
             "whats_new_last_seen_version": default_whats_new_last_seen_version(),
             "overlay_style": "live",
+            "autostart_enabled": true,
             "transcribe_accelerator": "gpu",
             "transcribe_gpu_device": 2
         });

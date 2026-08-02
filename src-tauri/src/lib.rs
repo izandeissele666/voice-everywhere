@@ -39,8 +39,8 @@ use tauri::image::Image;
 pub use transcription_coordinator::TranscriptionCoordinator;
 
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Listener, Manager};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri::{AppHandle, Listener, Manager};
+use tauri_plugin_autostart::{Builder as AutostartBuilder, ManagerExt};
 use tauri_plugin_log::{Builder as LogBuilder, RotationStrategy, Target, TargetKind};
 
 use crate::settings::get_settings;
@@ -257,13 +257,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
                 // Full explanation lives in the settings-window banner
                 show_main_window(app);
             }
-            "check_updates" => {
-                let settings = settings::get_settings(app);
-                if settings.update_checks_enabled {
-                    show_main_window(app);
-                    let _ = app.emit("check-for-updates", ());
-                }
-            }
             "copy_last_transcript" => {
                 tray::copy_last_transcript(app);
             }
@@ -345,19 +338,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
 #[tauri::command]
 #[specta::specta]
-fn trigger_update_check(app: AppHandle) -> Result<(), String> {
-    let settings = settings::get_settings(&app);
-    if !settings.update_checks_enabled {
+fn show_main_window_command(app: AppHandle) -> Result<(), String> {
+    if app.state::<CliArgs>().start_hidden {
         return Ok(());
     }
-    app.emit("check-for-updates", ())
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-fn show_main_window_command(app: AppHandle) -> Result<(), String> {
     show_main_window(&app);
     Ok(())
 }
@@ -400,12 +384,30 @@ mod headless_guard_tests {
     }
 }
 
-/// Headless one-shot transcription for the `--transcribe-file` / `--list-devices`
-/// path. Drives the same `TranscriptionManager::transcribe` the app uses; no
-/// mic, no VAD, no download. Returns a process exit code (0 ok, 1 runtime
-/// failure, 2 bad input/usage).
+/// Headless model and transcription operations. `--download-model` uses the
+/// same `ModelManager` pipeline as the app; `--transcribe-file` drives the same
+/// `TranscriptionManager::transcribe` path with no mic or VAD. Returns a process
+/// exit code (0 ok, 1 runtime failure, 2 bad input/usage).
 fn run_headless_transcription(app: &AppHandle, args: &CliArgs) -> i32 {
     use std::time::Instant;
+
+    if let Some(model_id) = args.download_model.as_deref() {
+        let download_start = Instant::now();
+        let model_manager = app.state::<Arc<ModelManager>>();
+        if let Err(e) = tauri::async_runtime::block_on(model_manager.download_model(model_id)) {
+            eprintln!("error: download_model('{}') failed: {}", model_id, e);
+            return 1;
+        }
+        println!(
+            "downloaded model={} elapsed={}ms",
+            model_id,
+            download_start.elapsed().as_millis()
+        );
+
+        if args.transcribe_file.is_none() && !args.list_devices && !args.list_models {
+            return 0;
+        }
+    }
 
     // --list-devices: print registered compute devices (with indices) and exit.
     // Useful on multi-GPU machines to discover the index for --device-index.
@@ -610,6 +612,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_audio_feedback_volume_setting,
             shortcut::change_sound_theme_setting,
             shortcut::change_theme_setting,
+            shortcut::change_accent_color_setting,
             shortcut::change_start_hidden_setting,
             shortcut::change_autostart_setting,
             shortcut::change_translate_to_english_setting,
@@ -662,7 +665,6 @@ pub fn run(cli_args: CliArgs) {
             shortcut::handy_keys::stop_handy_keys_recording,
             secure_input::get_secure_input_status,
             secure_input::run_keyboard_diagnostic,
-            trigger_update_check,
             show_main_window_command,
             commands::cancel_operation,
             commands::is_portable,
@@ -705,6 +707,8 @@ pub fn run(cli_args: CliArgs) {
             commands::transcription::set_model_unload_timeout,
             commands::transcription::get_model_load_status,
             commands::transcription::unload_model_manually,
+            commands::transcription::transcribe_file,
+            commands::transcription::save_transcription_text,
             commands::history::get_history_entries,
             commands::history::toggle_history_entry_saved,
             commands::history::get_audio_file_path,
@@ -732,8 +736,10 @@ pub fn run(cli_args: CliArgs) {
 
     // The headless path must run as its own instance (see the single-instance
     // note below), not forward to an already-running app.
-    let headless_mode =
-        cli_args.transcribe_file.is_some() || cli_args.list_devices || cli_args.list_models;
+    let headless_mode = cli_args.transcribe_file.is_some()
+        || cli_args.list_devices
+        || cli_args.list_models
+        || cli_args.download_model.is_some();
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -794,9 +800,9 @@ pub fn run(cli_args: CliArgs) {
 
     // Single-instance forwards CLI args to an already-running Handy and exits.
     // That would make the headless path
-    // (--transcribe-file/--list-devices/--list-models) a silent no-op whenever the
-    // app is already open, so skip it in headless mode and run a standalone
-    // instance instead.
+    // (--transcribe-file/--list-devices/--list-models/--download-model) a silent
+    // no-op whenever the app is already open, so skip it in headless mode and run
+    // a standalone instance instead.
     if !headless_mode {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             if args.iter().any(|a| a == "--toggle-transcription") {
@@ -814,28 +820,29 @@ pub fn run(cli_args: CliArgs) {
     builder
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![]),
-        ))
+        .plugin(
+            AutostartBuilder::new()
+                .app_name("Voice Everywhere")
+                .arg("--start-hidden")
+                .build(),
+        )
         .manage(cli_args.clone())
         .setup(move |app| {
             specta_builder.mount_events(app);
 
-            // Headless one-shot path (`--transcribe-file` / `--list-devices` /
-            // `--list-models`): initialize only what transcription needs — the
-            // store/paths plugins, the model + transcription managers, and the
-            // transcribe-cpp backend + accelerator settings — then run on a worker
-            // thread and exit. Deliberately skips the window, tray, overlay, audio
-            // recorder (so it never opens the mic, even with always_on_microphone),
-            // signal handlers, and autostart that initialize_core_logic sets up.
+            // Headless one-shot path: initialize only what model download and
+            // transcription need — the store/paths plugins, the model +
+            // transcription managers, and the transcribe-cpp backend + accelerator
+            // settings — then run on a worker thread and exit. Deliberately skips
+            // the window, tray, overlay, audio recorder (so it never opens the mic,
+            // even with always_on_microphone), signal handlers, and autostart that
+            // initialize_core_logic sets up.
             if headless_mode {
                 let app_handle = app.handle().clone();
                 let model_manager = Arc::new(
@@ -875,9 +882,10 @@ pub fn run(cli_args: CliArgs) {
             // for portable mode (redirects WebView2 cache to portable Data dir)
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
-                    .title("Handy")
-                    .inner_size(680.0, 570.0)
-                    .min_inner_size(680.0, 570.0)
+                    .title("Voice Everywhere")
+                    .inner_size(1000.0, 680.0)
+                    .min_inner_size(860.0, 620.0)
+                    .center()
                     .resizable(true)
                     .maximizable(true)
                     .visible(false);
@@ -947,12 +955,16 @@ pub fn run(cli_args: CliArgs) {
             // CLI --start-hidden flag overrides the setting.
             // But if permission onboarding is required, always show the window.
             let should_hide = settings.start_hidden || cli_args.start_hidden;
-            let should_force_show = should_force_show_permissions_window(&app_handle);
+            // An explicit --start-hidden is used by the tray shortcut and must
+            // win over permission onboarding. The user can reopen the app from
+            // the tray to grant access; regular first launches still show it.
+            let should_force_show =
+                !cli_args.start_hidden && should_force_show_permissions_window(&app_handle);
 
             // If start_hidden but tray is disabled, we must show the window
             // anyway. Without a tray icon, the dock is the only way back in.
             let tray_available = settings.show_tray_icon && !cli_args.no_tray;
-            if should_force_show || !should_hide || !tray_available {
+            if should_force_show || (!cli_args.start_hidden && (!should_hide || !tray_available)) {
                 show_main_window(&app_handle);
             }
 
@@ -991,6 +1003,15 @@ pub fn run(cli_args: CliArgs) {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match &event {
+            tauri::RunEvent::Ready => {
+                // Windows can activate a newly-created webview after setup. Hide it
+                // again once the event loop is ready for tray-only autostart.
+                if app.state::<CliArgs>().start_hidden {
+                    if let Some(main_window) = app.get_webview_window("main") {
+                        let _ = main_window.hide();
+                    }
+                }
+            }
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => {
                 show_main_window(app);

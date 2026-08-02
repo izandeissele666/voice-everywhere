@@ -36,19 +36,19 @@ tauri_panel! {
 // Native overlay window sizes (logical points). One window is reused for every
 // state and resized in `show_overlay_state`; each size need only be at least as
 // large as the card it hosts (the `--ov-*` vars in RecordingOverlay.css). The
-// card is CSS-anchored flush to the screen edge, so window height doesn't move
-// where the card sits — only OVERLAY_TOP_OFFSET / OVERLAY_BOTTOM_OFFSET do. Keep
-// these in sync with the CSS card geometry.
+// card is CSS-anchored flush to the lower-right window edge, so window dimensions
+// don't move where the card sits — only the edge offsets do. Keep these in sync
+// with the CSS card geometry.
 //
-// Compact overlay (Minimal / transcribing / processing): the 40h pill animates
-// width from 172 (--ov-rest-w) to 216 (--ov-work-w) and expands from center, so
+// Compact overlay (Minimal / transcribing / processing): the 54h pill animates
+// width from 232 (--ov-rest-w) to 290 (--ov-work-w) and expands from center, so
 // the window must fit the widest state plus a little slack.
-const OVERLAY_WIDTH: f64 = 256.0;
-const OVERLAY_HEIGHT: f64 = 46.0;
+const OVERLAY_WIDTH: f64 = 320.0;
+const OVERLAY_HEIGHT: f64 = 68.0;
 
-// Actual is 394x118, just a little extra
-const OVERLAY_STREAM_WIDTH: f64 = 400.0;
-const OVERLAY_STREAM_HEIGHT: f64 = 120.0;
+// Includes a small transparent gutter for the perimeter animation.
+const OVERLAY_STREAM_WIDTH: f64 = 492.0;
+const OVERLAY_STREAM_HEIGHT: f64 = 164.0;
 
 /// Overlay window size (logical) for a given UI state.
 fn overlay_dimensions(state: &str) -> (f64, f64) {
@@ -72,6 +72,8 @@ const OVERLAY_BOTTOM_OFFSET: f64 = 15.0;
 
 #[cfg(any(target_os = "windows", target_os = "linux"))]
 const OVERLAY_BOTTOM_OFFSET: f64 = 40.0;
+
+const OVERLAY_RIGHT_OFFSET: f64 = 24.0;
 
 #[cfg(target_os = "linux")]
 fn update_gtk_layer_shell_anchors(overlay_window: &tauri::webview::WebviewWindow) {
@@ -248,7 +250,7 @@ fn calculate_overlay_position(
 
     let settings = settings::get_settings(app_handle);
 
-    let x = monitor_x + (monitor_width - width) / 2.0;
+    let x = monitor_x + monitor_width - width - OVERLAY_RIGHT_OFFSET;
     let y = match settings.overlay_position {
         OverlayPosition::Top => monitor_y + OVERLAY_TOP_OFFSET,
         OverlayPosition::Bottom => {
@@ -294,8 +296,10 @@ fn windows_overlay_bounds(
 ) -> (i32, i32, i32, i32) {
     let width = (logical_width * scale).round().max(1.0) as i32;
     let height = (logical_height * scale).round().max(1.0) as i32;
-    let x = (monitor_position.x as f64 + (monitor_size.width as f64 - width as f64) / 2.0).round()
-        as i32;
+    let x = (monitor_position.x as f64 + monitor_size.width as f64
+        - width as f64
+        - OVERLAY_RIGHT_OFFSET * scale)
+        .round() as i32;
     let y = match overlay_position {
         OverlayPosition::Top => {
             (monitor_position.y as f64 + OVERLAY_TOP_OFFSET * scale).round() as i32
@@ -592,8 +596,8 @@ fn update_overlay_position_on_main(app_handle: &AppHandle) {
 
         #[cfg(not(target_os = "windows"))]
         {
-            // Use the window's current size so centering stays correct whether the
-            // overlay is in compact or streaming layout.
+            // Use the window's current size so right-edge placement stays correct
+            // whether the overlay is in compact or streaming layout.
             let (width, height) = current_overlay_logical_size(&overlay_window)
                 .unwrap_or((OVERLAY_WIDTH, OVERLAY_HEIGHT));
             if let Some((x, y)) = calculate_overlay_position(app_handle, width, height) {
@@ -729,7 +733,7 @@ mod tests {
                 OVERLAY_HEIGHT,
                 OverlayPosition::Bottom,
             ),
-            (3648, 2031, 384, 69)
+            (5244, 1998, 480, 102)
         );
         assert_eq!(
             windows_overlay_bounds(
@@ -740,7 +744,7 @@ mod tests {
                 OVERLAY_HEIGHT,
                 OverlayPosition::Top,
             ),
-            (3648, 6, 384, 69)
+            (5244, 6, 480, 102)
         );
     }
 
@@ -756,7 +760,7 @@ mod tests {
                 OVERLAY_STREAM_HEIGHT,
                 OverlayPosition::Bottom,
             ),
-            (-1530, 1040, 500, 150)
+            (-645, 985, 615, 205)
         );
     }
 }

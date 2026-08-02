@@ -61,31 +61,6 @@
   }
 }
 
-/*
- * Explicit theme override, driven by the `theme` setting via
- * `document.documentElement.dataset.theme`. When set, the higher-specificity
- * attribute selectors win over the `prefers-color-scheme` media query above,
- * so a user can keep Handy light or dark regardless of the OS setting.
- * `system` (or no attribute) leaves the OS in charge.
- */
-:root[data-theme="light"] {
-  --color-text: var(--light-color-text);
-  --color-background: var(--light-color-background);
-  --color-logo-primary: var(--light-color-logo-primary);
-  --color-logo-stroke: var(--light-color-logo-stroke);
-  --color-warning: var(--light-color-warning);
-  --color-error: var(--light-color-error);
-}
-
-:root[data-theme="dark"] {
-  --color-text: var(--dark-color-text);
-  --color-background: var(--dark-color-background);
-  --color-logo-primary: var(--dark-color-logo-primary);
-  --color-logo-stroke: var(--dark-color-logo-stroke);
-  --color-warning: var(--dark-color-warning);
-  --color-error: var(--dark-color-error);
-}
-
 /* macOS - tint native overlay scrollbar thumb */
 :root[data-platform="macos"] {
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -118,6 +93,235 @@
 @layer utilities {
   .text-stroke {
     -webkit-text-stroke: 2px var(--color-text-stroke);
+  }
+}
+
+.page-enter {
+  animation: page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-atmosphere {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-atmosphere-orb {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  filter: blur(1px);
+  opacity: 0.8;
+  will-change: transform;
+}
+
+.app-atmosphere-orb-one {
+  top: -190px;
+  right: -140px;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-logo-primary) 13%, transparent) 0%,
+    transparent 68%
+  );
+  animation: atmosphere-drift-one 22s ease-in-out infinite alternate;
+}
+
+.app-atmosphere-orb-two {
+  bottom: -260px;
+  left: -200px;
+  width: 620px;
+  height: 620px;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-logo-primary) 8%, transparent) 0%,
+    transparent 70%
+  );
+  animation: atmosphere-drift-two 28s ease-in-out infinite alternate;
+}
+
+.app-atmosphere-specks {
+  position: absolute;
+  inset: 8% 6%;
+  display: block;
+  opacity: 0.35;
+  background-image:
+    radial-gradient(circle at 8% 18%, var(--color-logo-primary) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 22% 74%, var(--color-logo-primary) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 36% 29%, var(--color-logo-primary) 0 1.2px, transparent 1.9px),
+    radial-gradient(circle at 49% 91%, var(--color-logo-primary) 0 1px, transparent 1.7px),
+    radial-gradient(circle at 61% 43%, var(--color-logo-primary) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 75% 16%, var(--color-logo-primary) 0 1.2px, transparent 2px),
+    radial-gradient(circle at 88% 66%, var(--color-logo-primary) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 93% 35%, var(--color-logo-primary) 0 1px, transparent 1.7px);
+  mask-image: radial-gradient(ellipse at center, #000 10%, transparent 78%);
+  animation: atmosphere-specks-drift 34s linear infinite alternate;
+}
+
+.app-atmosphere-particles {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.app-atmosphere-particle {
+  position: absolute;
+  border-radius: 999px;
+  background: var(--color-logo-primary);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--color-logo-primary) 80%, transparent);
+  opacity: 0;
+  animation-name: atmosphere-particle-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+@keyframes atmosphere-drift-one {
+  to {
+    transform: translate3d(-54px, 42px, 0) scale(1.08);
+  }
+}
+
+@keyframes atmosphere-drift-two {
+  to {
+    transform: translate3d(70px, -42px, 0) scale(1.06);
+  }
+}
+
+@keyframes atmosphere-specks-drift {
+  to {
+    transform: translate3d(-18px, 14px, 0);
+  }
+}
+
+@keyframes atmosphere-particle-float {
+  0% {
+    opacity: 0.04;
+    transform: translate3d(-6px, 10px, 0) scale(0.8);
+  }
+  45% {
+    opacity: 0.66;
+  }
+  100% {
+    opacity: 0.08;
+    transform: translate3d(11px, -17px, 0) scale(1.2);
+  }
+}
+
+.brand-logo-dark {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-logo-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .brand-logo-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .brand-logo-light {
+    display: none;
+  }
+  :root:not([data-theme]) .brand-logo-dark {
+    display: block;
+  }
+}
+
+.accent-range::-webkit-slider-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  appearance: none;
+  background: var(--color-background-ui);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-background) 85%, transparent);
+}
+
+.accent-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-background-ui);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-background) 85%, transparent);
+}
+
+.sidebar-active-rail {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 26%;
+  width: 3px;
+  height: 48%;
+  border-radius: 0 999px 999px 0;
+  background: var(--color-logo-primary);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-logo-primary) 55%, transparent);
+  animation: sidebar-active-rail 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes sidebar-active-rail {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+}
+
+.dictation-mic-active {
+  position: relative;
+}
+
+.dictation-mic-active::after {
+  position: absolute;
+  inset: -7px;
+  border: 1px solid color-mix(in srgb, var(--color-logo-primary) 55%, transparent);
+  border-radius: inherit;
+  content: "";
+  animation: dictation-mic-halo 1.8s ease-out infinite;
+}
+
+@keyframes dictation-mic-halo {
+  70%,
+  to {
+    opacity: 0;
+    transform: scale(1.17);
+  }
+}
+
+.result-reveal {
+  animation: result-reveal 220ms ease-out;
+}
+
+@keyframes result-reveal {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  .app-atmosphere-orb,
+  .app-atmosphere-specks,
+  .app-atmosphere-particle,
+  .dictation-mic-active::after,
+  .result-reveal,
+  .sidebar-active-rail {
+    animation: none;
   }
 }
 

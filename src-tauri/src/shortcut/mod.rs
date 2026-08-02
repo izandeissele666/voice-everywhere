@@ -22,9 +22,9 @@ use tauri_plugin_autostart::ManagerExt;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::settings::APPLE_INTELLIGENCE_DEFAULT_MODEL_ID;
 use crate::settings::{
-    self, get_settings, AutoSubmitKey, ClipboardHandling, KeyboardImplementation, LLMPrompt,
-    OverlayPosition, OverlayStyle, PasteMethod, ShortcutBinding, SoundTheme, Theme, TypingTool,
-    APPLE_INTELLIGENCE_PROVIDER_ID,
+    self, get_settings, AccentColor, AutoSubmitKey, ClipboardHandling, KeyboardImplementation,
+    LLMPrompt, OverlayPosition, OverlayStyle, PasteMethod, ShortcutBinding, SoundTheme, Theme,
+    TypingTool, APPLE_INTELLIGENCE_PROVIDER_ID,
 };
 use crate::tray;
 
@@ -587,6 +587,26 @@ pub fn change_theme_setting(app: AppHandle, theme: String) -> Result<(), String>
     settings::write_settings(&app, settings);
     #[cfg(target_os = "windows")]
     apply_window_theme(&app, parsed);
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({ "setting": "theme", "value": theme }),
+    );
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_accent_color_setting(
+    app: AppHandle,
+    accent_color: AccentColor,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.accent_color = accent_color;
+    settings::write_settings(&app, settings);
+    let _ = app.emit(
+        "settings-changed",
+        serde_json::json!({ "setting": "accent_color", "value": accent_color }),
+    );
     Ok(())
 }
 

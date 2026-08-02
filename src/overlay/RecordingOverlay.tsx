@@ -11,12 +11,15 @@ import type {
 } from "@/bindings";
 import i18n, { syncLanguageFromSettings } from "@/i18n";
 import { getLanguageDirection } from "@/lib/utils/rtl";
+import { applyAccentColor, applyTheme } from "@/lib/utils/theme";
 
 type OverlayState = "recording" | "streaming" | "transcribing" | "processing";
 
 // Number of reactive bars in the waveform (the simple, smoothed style shared by
 // every overlay form). Mic levels arrive as 16 FFT buckets; we take the first N.
 const WAVE_BARS = 9;
+// Keep the classic ring available for quick visual comparison.
+const WORKING_RING_STYLE: "orbit" | "classic" = "orbit";
 
 const RecordingOverlay: React.FC = () => {
   const { t } = useTranslation();
@@ -57,6 +60,8 @@ const RecordingOverlay: React.FC = () => {
         try {
           const settings = await commands.getAppSettings();
           if (settings.status === "ok") {
+            applyTheme(settings.data.theme ?? "system");
+            applyAccentColor(settings.data.accent_color ?? "violet");
             setPosition(
               settings.data.overlay_position === "top" ? "top" : "bottom",
             );
@@ -156,7 +161,7 @@ const RecordingOverlay: React.FC = () => {
         <i
           key={i}
           style={{
-            height: `${Math.max(3, Math.min(18, 3 + Math.pow(v, 0.7) * 15))}px`,
+            height: `${Math.max(3, Math.min(21, 3 + Math.pow(v, 0.7) * 18))}px`,
           }}
         />
       ))}
@@ -223,10 +228,24 @@ const RecordingOverlay: React.FC = () => {
       <div dir={direction} className={`ov-stage ${position}`}>
         <div
           key={session}
-          className={`scard ${open ? "open" : ""} ${collapsed ? "working" : ""} ${
+          className={`scard ${open ? "open" : ""} ${
+            collapsed ? `working ring-${WORKING_RING_STYLE}` : ""
+          } ${
             isVisible ? "" : "leaving"
           }`}
         >
+          {collapsed && (
+            <svg className="swork-orbit" aria-hidden="true">
+              <rect
+                x="3"
+                y="3"
+                width="calc(100% - 6px)"
+                height="calc(100% - 6px)"
+                rx="25"
+                pathLength="100"
+              />
+            </svg>
+          )}
           <div className="stext">
             <div className="stext-clip">
               <div
@@ -274,8 +293,22 @@ const RecordingOverlay: React.FC = () => {
       className={`ov-stage ${position} ov-fade ${isVisible ? "show" : ""}`}
     >
       <div
-        className={`scard compact ${working && isVisible ? "cworking" : ""}`}
+        className={`scard compact ${
+          working && isVisible ? `cworking ring-${WORKING_RING_STYLE}` : ""
+        }`}
       >
+        {working && (
+          <svg className="swork-orbit" aria-hidden="true">
+            <rect
+              x="3"
+              y="3"
+              width="calc(100% - 6px)"
+              height="calc(100% - 6px)"
+              rx="25"
+              pathLength="100"
+            />
+          </svg>
+        )}
         {working ? workingRow(workLabel, true) : listeningRow(false, true)}
       </div>
     </div>

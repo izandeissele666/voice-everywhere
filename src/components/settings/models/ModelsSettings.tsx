@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { ChevronDown, Globe, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, Cpu, Globe, Info, RefreshCw, Search, Star } from "lucide-react";
 import type { ModelCardStatus } from "@/components/onboarding";
 import { ModelCard } from "@/components/onboarding";
 import { useModelStore } from "@/stores/modelStore";
@@ -10,7 +10,8 @@ import {
   MODEL_CAPABILITY_LANGUAGES,
   supportsLanguageCode,
 } from "@/lib/constants/languages.ts";
-import type { ModelInfo } from "@/bindings";
+import { commands, type GpuDeviceOption, type ModelInfo } from "@/bindings";
+import { getHardwareRecommendation } from "@/lib/modelProfiles";
 
 // check if model supports a language based on its supported_languages list
 const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
@@ -23,6 +24,9 @@ const modelSupportsLanguage = (model: ModelInfo, langCode: string): boolean => {
 const isLegacyModel = (model: ModelInfo): boolean =>
   typeof model.source === "object" && "Url" in model.source;
 
+const RUSSIAN_PRIMARY_MODEL_ID =
+  "handy-computer/whisper-medium-gguf/whisper-medium-Q8_0.gguf";
+
 export const ModelsSettings: React.FC = () => {
   const { t } = useTranslation();
   const [switchingModelId, setSwitchingModelId] = useState<string | null>(null);
@@ -30,6 +34,8 @@ export const ModelsSettings: React.FC = () => {
   const [languageFilter, setLanguageFilter] = useState("all");
   const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false);
   const [languageSearch, setLanguageSearch] = useState("");
+  const [gpuDevices, setGpuDevices] = useState<GpuDeviceOption[]>([]);
+  const [totalSystemMemoryMb, setTotalSystemMemoryMb] = useState(0);
   const languageDropdownRef = useRef<HTMLDivElement>(null);
   const languageSearchInputRef = useRef<HTMLInputElement>(null);
   const {
@@ -48,6 +54,16 @@ export const ModelsSettings: React.FC = () => {
     deleteModel,
     rescanLocalModels,
   } = useModelStore();
+  const hardwareRecommendation = useMemo(
+    () => getHardwareRecommendation(gpuDevices, totalSystemMemoryMb),
+    [gpuDevices, totalSystemMemoryMb],
+  );
+  const recommendedModel = models.find(
+    (model) => model.id === hardwareRecommendation.modelId,
+  );
+  const russianPrimaryModel = models.find(
+    (model) => model.id === RUSSIAN_PRIMARY_MODEL_ID,
+  );
 
   // click outside handler for language dropdown
   useEffect(() => {
@@ -62,6 +78,18 @@ export const ModelsSettings: React.FC = () => {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    commands
+      .getAvailableAccelerators()
+      .then((available) => {
+        setGpuDevices(available.gpu_devices);
+        setTotalSystemMemoryMb(available.total_system_memory_mb);
+      })
+      .catch((error) => {
+        console.warn("Failed to detect transcription hardware:", error);
+      });
   }, []);
 
   // focus search input when dropdown opens
@@ -207,15 +235,27 @@ export const ModelsSettings: React.FC = () => {
       return 0;
     });
 
+    available.sort((a, b) => {
+      if (a.id === hardwareRecommendation.modelId) return -1;
+      if (b.id === hardwareRecommendation.modelId) return 1;
+      return 0;
+    });
+
     return {
       downloadedModels: downloaded,
       availableModels: available,
     };
-  }, [filteredModels, downloadingModels, extractingModels, currentModel]);
+  }, [
+    filteredModels,
+    downloadingModels,
+    extractingModels,
+    currentModel,
+    hardwareRecommendation.modelId,
+  ]);
 
   if (loading) {
     return (
-      <div className="max-w-3xl w-full mx-auto">
+      <div className="w-full max-w-4xl px-2 py-5 sm:px-6 sm:py-9">
         <div className="flex items-center justify-center py-16">
           <div className="w-8 h-8 border-2 border-logo-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -224,14 +264,67 @@ export const ModelsSettings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-3xl w-full mx-auto space-y-4">
-      <div className="mb-4">
-        <h1 className="text-xl font-semibold mb-2">
+    <section className="w-full max-w-4xl space-y-4 px-2 py-5 sm:px-6 sm:py-9">
+      <div className="mb-8">
+        <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-logo-primary">
+          <Cpu size={14} />
+          {t("sidebar.models")}
+        </div>
+        <h1 className="text-3xl font-semibold tracking-[-0.04em] text-text sm:text-4xl">
           {t("settings.models.title")}
         </h1>
-        <p className="text-sm text-text/60">
+        <p className="mt-3 max-w-xl text-sm leading-6 text-mid-gray">
           {t("settings.models.description")}
         </p>
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-mid-gray/20 bg-mid-gray/5 px-3 py-2.5 text-xs leading-5 text-text/65">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-text/50" />
+          <p>{t("settings.models.russianSpeechNotice")}</p>
+        </div>
+        {russianPrimaryModel && (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-logo-primary/25 bg-logo-primary/[0.075] px-3 py-2.5 text-sm text-text/75">
+            <Star className="mt-0.5 h-4 w-4 shrink-0 fill-logo-primary text-logo-primary" />
+            <div>
+              <p className="font-medium text-text">
+                {t("settings.models.primaryRussianRecommendation.title")}
+              </p>
+              <p className="mt-0.5 text-xs leading-5">
+                {t("settings.models.primaryRussianRecommendation.description", {
+                  model: russianPrimaryModel.name,
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+        {recommendedModel && (
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-logo-primary/20 bg-logo-primary/5 px-3 py-2.5 text-sm text-text/70">
+            <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-logo-primary" />
+            <div>
+              <p className="font-medium text-text">
+                {t("settings.models.recommendation.title")}
+              </p>
+              <p className="mt-0.5 text-xs leading-5">
+                {t("settings.models.recommendation.description", {
+                  profile: t(
+                    `settings.models.recommendation.${hardwareRecommendation.profile}`,
+                  ),
+                  model: recommendedModel.name,
+                  hardware: hardwareRecommendation.gpu
+                    ? hardwareRecommendation.integratedGpu
+                      ? t("settings.models.recommendation.integratedGpu", {
+                          gpu: hardwareRecommendation.gpu.name,
+                        })
+                      : t("settings.models.recommendation.gpu", {
+                          gpu: hardwareRecommendation.gpu.name,
+                          vram: (
+                            hardwareRecommendation.gpu.total_vram_mb / 1024
+                          ).toFixed(1),
+                        })
+                    : t("settings.models.recommendation.cpu"),
+                })}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Search bar — filter the catalog by name or description */}
@@ -398,6 +491,11 @@ export const ModelsSettings: React.FC = () => {
                   downloadProgress={getDownloadProgress(model.id)}
                   downloadSpeed={getDownloadSpeed(model.id)}
                   showRecommended={true}
+                  recommendedLabel={
+                    model.id === RUSSIAN_PRIMARY_MODEL_ID
+                      ? t("settings.models.primaryRussianRecommendation.badge")
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -408,6 +506,6 @@ export const ModelsSettings: React.FC = () => {
           {t("settings.models.noModelsMatch")}
         </div>
       )}
-    </div>
+    </section>
   );
 };
